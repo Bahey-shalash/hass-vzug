@@ -158,7 +158,17 @@
     },
     "select": {
       "program_select": {
-        "name": "Programmwahl"
+        "name": "Programmwahl",
+        "state": {
+          "eco": "Eco",
+          "automatic": "Automatik",
+          "quick": "Kurz",
+          "intensive": "Intensiv",
+          "glass": "Glas",
+          "fondue_raclette": "Fondue/Raclette",
+          "hygiene": "Hygiene",
+          "pre_rinsing": "Vorspülen"
+        }
       }
     }
   }

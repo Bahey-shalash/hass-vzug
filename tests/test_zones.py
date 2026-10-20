@@ -1,5 +1,6 @@
 """Zone handling for refrigerators, based on a CombiCooler V2000 (API 1.8.0)."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -134,3 +135,31 @@ async def test_cmd_values_use_getcmd_and_setcmd():
         await api.set_cmd_value("SilentPlusMode", "true")
         assert command.call_args.kwargs["command"] == "setcmdSilentPlusMode"
         assert command.call_args.kwargs["params"] == {"value": "true"}
+
+
+def test_program_keys_have_translations_and_icons():
+    """Every program the AdoraDish V4000 reports must have a name and an icon."""
+    import pathlib
+
+    base = pathlib.Path(zones.__file__).parent
+    icons = json.loads((base / "icons.json").read_text())
+    icon_states = icons["entity"]["select"]["program_select"]["state"]
+    names = [
+        "Eco",
+        "Automatic",
+        "Quick",
+        "Intensive",
+        "Glass",
+        "Fondue/Raclette",
+        "Hygiene",
+        "Pre-rinsing",
+    ]
+    for lang in ("en", "de", "fr"):
+        translations = json.loads((base / "translations" / f"{lang}.json").read_text())
+        states = translations["entity"]["select"]["program_select"]["state"]
+        for name in names:
+            assert zones.program_key(name) in states, (lang, name)
+    for name in names:
+        assert zones.program_key(name) in icon_states, name
+    assert zones.program_key("Fondue/Raclette") == "fondue_raclette"
+    assert zones.program_key("Pre-rinsing") == "pre_rinsing"

@@ -44,7 +44,6 @@ class ProgramSelect(CoordinatorEntity[ProgramCoordinator], SelectEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "program_select"
-    _attr_icon = "mdi:dishwasher"
 
     def __init__(self, shared: Shared) -> None:
         assert shared.program_coord is not None
@@ -55,14 +54,17 @@ class ProgramSelect(CoordinatorEntity[ProgramCoordinator], SelectEntity):
 
     @property
     def options(self) -> list[str]:
-        return list(self.coordinator.data.names.values())
+        return [
+            zones.program_key(name) for name in self.coordinator.data.names.values()
+        ]
 
     @property
     def current_option(self) -> str | None:
         current = self.coordinator.data.current
         if current is None:
             return None
-        return self.coordinator.data.names.get(current.get("id"))
+        name = self.coordinator.data.names.get(current.get("id"))
+        return zones.program_key(name) if name else None
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
@@ -73,7 +75,7 @@ class ProgramSelect(CoordinatorEntity[ProgramCoordinator], SelectEntity):
         }
 
     async def async_select_option(self, option: str) -> None:
-        program_id = zones.program_id_by_name(self.coordinator.data.names, option)
+        program_id = zones.program_id_by_key(self.coordinator.data.names, option)
         if program_id is None:
             raise ValueError(f"unknown program {option!r}")
         await self.shared.client.set_program(program_id)

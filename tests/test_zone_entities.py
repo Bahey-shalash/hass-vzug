@@ -282,17 +282,26 @@ async def test_program_select():
         device_info={},
     )
     select = ProgramSelect(shared)
-    assert select.options[:3] == ["Eco", "Automatic", "Quick"]
+    assert select.options == [
+        "eco",
+        "automatic",
+        "quick",
+        "intensive",
+        "glass",
+        "fondue_raclette",
+        "hygiene",
+        "pre_rinsing",
+    ]
     assert select.current_option is None
 
-    await select.async_select_option("Quick")
+    await select.async_select_option("quick")
     shared.client.set_program.assert_awaited_once_with(86)
 
     coord.data = zones.ProgramState(
         names=DISHWASHER_NAMES,
         current={"id": 50, "status": "selected", "duration": {"set": 21300}},
     )
-    assert select.current_option == "Eco"
+    assert select.current_option == "eco"
     assert select.extra_state_attributes == {
         "status": "selected",
         "duration_seconds": 21300,

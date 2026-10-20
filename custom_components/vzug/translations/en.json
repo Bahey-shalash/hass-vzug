@@ -158,7 +158,17 @@
         },
         "select": {
             "program_select": {
-                "name": "Program selection"
+                "name": "Program selection",
+                "state": {
+                    "eco": "Eco",
+                    "automatic": "Automatic",
+                    "quick": "Quick",
+                    "intensive": "Intensive",
+                    "glass": "Glass",
+                    "fondue_raclette": "Fondue/Raclette",
+                    "hygiene": "Hygiene",
+                    "pre_rinsing": "Pre-rinsing"
+                }
             }
         }
     }

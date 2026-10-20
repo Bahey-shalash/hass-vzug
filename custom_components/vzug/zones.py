@@ -10,6 +10,7 @@ only read from it and write through 'api.VZugApi.set_zone_value' /
 """
 
 import dataclasses
+import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -126,8 +127,17 @@ def current_program(
     return None
 
 
-def program_id_by_name(names: Mapping[int, str], name: str) -> int | None:
-    return next((pid for pid, pname in names.items() if pname == name), None)
+def program_key(name: str) -> str:
+    """'Fondue/Raclette' -> 'fondue_raclette', the select option for a program.
+
+    Options are translation keys so Home Assistant can show each program with its
+    own name and icon. A program we have no translation for shows its key.
+    """
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def program_id_by_key(names: Mapping[int, str], key: str) -> int | None:
+    return next((pid for pid, name in names.items() if program_key(name) == key), None)
 
 
 def program_options(program: Mapping[str, Any]) -> dict[str, bool]:
