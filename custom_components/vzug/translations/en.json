@@ -46,6 +46,9 @@
             },
             "refresh_now": {
                 "name": "Refresh Now"
+            },
+            "send_program": {
+                "name": "Send to appliance"
             }
         },
         "sensor": {

@@ -128,3 +128,17 @@ def current_program(
 
 def program_id_by_name(names: Mapping[int, str], name: str) -> int | None:
     return next((pid for pid, pname in names.items() if pname == name), None)
+
+
+def program_options(program: Mapping[str, Any]) -> dict[str, bool]:
+    """The on/off options of a selected program, as 'Send to appliance' sends them.
+
+    Recorded from the V-ZUG app for Eco:
+    {"id":50,"dryPlus":false,"energySaving":false,"partialload":false,"rinsePlus":false}
+    Only options the appliance lets you change (those listing 'options') are sent.
+    """
+    return {
+        key: bool(value.get("set", False))
+        for key, value in program.items()
+        if isinstance(value, Mapping) and value.get("options") == [True, False]
+    }

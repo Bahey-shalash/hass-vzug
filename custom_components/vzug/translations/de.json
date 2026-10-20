@@ -46,6 +46,9 @@
       },
       "refresh_now": {
         "name": "Jetzt Aktualisieren"
+      },
+      "send_program": {
+        "name": "An Gerät senden"
       }
     },
     "sensor": {

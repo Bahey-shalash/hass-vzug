@@ -297,3 +297,49 @@ async def test_program_select():
         "status": "selected",
         "duration_seconds": 21300,
     }
+
+
+@pytest.mark.asyncio
+async def test_send_program_sends_what_the_app_sends():
+    from custom_components.vzug.button import SendProgram
+
+    eco = {
+        "id": 50,
+        "name": "Eco",
+        "status": "selected",
+        "starttime": {"min": 0, "max": 86400, "step": 600},
+        "duration": {"set": 21300},
+        "energySaving": {"set": False, "options": [True, False]},
+        "optiStart": {"set": False},
+        "partialload": {"set": False, "options": [True, False]},
+        "rinsePlus": {"set": False, "options": [True, False]},
+        "dryPlus": {"set": True, "options": [True, False]},
+    }
+    coord = MagicMock(
+        async_request_refresh=AsyncMock(),
+        async_refresh=AsyncMock(),
+        last_update_success=True,
+    )
+    coord.data = zones.ProgramState(names=DISHWASHER_NAMES, current=eco)
+    shared = SimpleNamespace(
+        program_coord=coord,
+        client=MagicMock(set_program=AsyncMock()),
+        unique_id_prefix="fc:1b:ff:06:01:da",
+        device_info={},
+    )
+    await SendProgram(shared).async_press()
+    shared.client.set_program.assert_awaited_once_with(
+        50,
+        {
+            "energySaving": False,
+            "partialload": False,
+            "rinsePlus": False,
+            "dryPlus": True,
+        },
+    )
+
+    coord.data = zones.ProgramState(names=DISHWASHER_NAMES, current=None)
+    from homeassistant.exceptions import HomeAssistantError
+
+    with pytest.raises(HomeAssistantError):
+        await SendProgram(shared).async_press()
