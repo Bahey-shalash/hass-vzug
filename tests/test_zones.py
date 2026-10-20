@@ -1,6 +1,5 @@
 """Zone handling for refrigerators, based on a CombiCooler V2000 (API 1.8.0)."""
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -110,10 +109,18 @@ async def test_set_zone_value_sends_what_the_app_sends():
     args, kwargs = command.call_args
     assert args == ("hh",)
     assert kwargs["command"] == "setProgram"
-    assert json.loads(kwargs["params"]["value"]) == {
-        "zone": "fridge1",
-        "partyCooling": "43200",
-    }
+    # byte for byte what the app sends, the appliance refuses JSON with spaces
+    assert kwargs["params"]["value"] == '{"zone":"fridge1","partyCooling":"43200"}'
+
+
+@pytest.mark.asyncio
+async def test_set_program_sends_compact_json():
+    api = VZugApi(base_url="http://example.com")
+    with patch.object(api, "_command", new_callable=AsyncMock) as command:
+        await api.set_program(50, {"dryPlus": False, "rinsePlus": False})
+    assert command.call_args.kwargs["params"]["value"] == (
+        '{"dryPlus":false,"rinsePlus":false,"id":50}'
+    )
 
 
 @pytest.mark.asyncio
