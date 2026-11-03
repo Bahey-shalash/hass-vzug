@@ -116,6 +116,8 @@ class ProgramState:
     """program id -> name, in the order the appliance lists them"""
     current: Mapping[str, Any] | None
     """the selected or running program, None while idle"""
+    total_seconds: int | None = None
+    """full length of the running program, as far as we know it (see 'track_run')"""
 
 
 def current_program(
@@ -152,3 +154,56 @@ def program_options(program: Mapping[str, Any]) -> dict[str, bool]:
         for key, value in program.items()
         if isinstance(value, Mapping) and value.get("options") == [True, False]
     }
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Run:
+    """The program that is running and how long it runs in total."""
+
+    program_id: int
+    total_seconds: int
+
+
+def run_seconds_left(program: Mapping[str, Any] | None) -> int | None:
+    """Seconds left of a running program, from 'duration.act'."""
+    if not program or program.get("status") != "active":
+        return None
+    left = value_field(program, "duration", "act")
+    return max(int(left), 0) if isinstance(left, (int, float)) else None
+
+
+def track_run(
+    previous: Run | None,
+    previous_program: Mapping[str, Any] | None,
+    program: Mapping[str, Any] | None,
+) -> Run | None:
+    """Work out the full length of the running program.
+
+    While running the appliance only reports the time left ('duration.act'). Its
+    length is known beforehand only while the program is selected
+    ('duration.set'), so remember that when the run starts. If we only see the run
+    once it is going (Home Assistant started mid-run), the first time left we see
+    is the best we have, and progress counts from there.
+    """
+    left = run_seconds_left(program)
+    if left is None:
+        return None
+    program_id = program.get("id")
+    if previous is not None and previous.program_id == program_id:
+        # the appliance can add time, ex. when the water heats slower
+        return Run(program_id, max(previous.total_seconds, left))
+    planned = value_field(previous_program, "duration", "set")
+    if (
+        previous_program is not None
+        and previous_program.get("id") == program_id
+        and isinstance(planned, (int, float))
+        and planned >= left
+    ):
+        return Run(program_id, int(planned))
+    return Run(program_id, left)
+
+
+def progress_percent(total: int | None, left: int | None) -> int | None:
+    if not total or left is None:
+        return None
+    return min(100, max(0, round(100 * (total - left) / total)))

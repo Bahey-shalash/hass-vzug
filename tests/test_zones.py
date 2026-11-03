@@ -163,3 +163,71 @@ def test_program_keys_have_translations_and_icons():
         assert zones.program_key(name) in icon_states, name
     assert zones.program_key("Fondue/Raclette") == "fondue_raclette"
     assert zones.program_key("Pre-rinsing") == "pre_rinsing"
+
+
+# AdoraDish V4000, recorded: Eco selected, then Intensive running
+ECO_SELECTED = {
+    "id": 50,
+    "name": "Eco",
+    "status": "selected",
+    "duration": {"set": 21300},
+}
+INTENSIVE_RUNNING = {
+    "id": 54,
+    "name": "Intensive",
+    "status": "active",
+    "duration": {"act": 3999},
+}
+
+
+def test_run_seconds_left():
+    assert zones.run_seconds_left(INTENSIVE_RUNNING) == 3999
+    assert zones.run_seconds_left(ECO_SELECTED) is None
+    assert zones.run_seconds_left(None) is None
+
+
+def test_track_run_uses_the_planned_length_when_seen_selected():
+    eco_running = {"id": 50, "status": "active", "duration": {"act": 21000}}
+    run = zones.track_run(None, ECO_SELECTED, eco_running)
+    assert run == zones.Run(50, 21300)
+    assert zones.progress_percent(run.total_seconds, 21000) == 1
+
+
+def test_track_run_started_mid_run_counts_from_first_sight():
+    run = zones.track_run(None, None, INTENSIVE_RUNNING)
+    assert run == zones.Run(54, 3999)
+    later = {**INTENSIVE_RUNNING, "duration": {"act": 2000}}
+    run = zones.track_run(run, INTENSIVE_RUNNING, later)
+    assert run == zones.Run(54, 3999)
+    assert zones.progress_percent(run.total_seconds, 2000) == 50
+
+
+def test_track_run_grows_when_the_appliance_adds_time():
+    run = zones.Run(54, 3000)
+    assert zones.track_run(run, INTENSIVE_RUNNING, INTENSIVE_RUNNING) == zones.Run(
+        54, 3999
+    )
+
+
+def test_track_run_ends_when_idle():
+    assert zones.track_run(zones.Run(54, 3999), INTENSIVE_RUNNING, None) is None
+
+
+def test_track_run_ignores_a_selection_of_another_program():
+    run = zones.track_run(None, ECO_SELECTED, INTENSIVE_RUNNING)
+    assert run == zones.Run(54, 3999)
+
+
+@pytest.mark.parametrize(
+    ("total", "left", "expected"),
+    [
+        (100, 100, 0),
+        (100, 25, 75),
+        (100, 0, 100),
+        (100, 150, 0),
+        (None, 10, None),
+        (100, None, None),
+    ],
+)
+def test_progress_percent(total, left, expected):
+    assert zones.progress_percent(total, left) == expected

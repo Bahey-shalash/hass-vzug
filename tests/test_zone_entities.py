@@ -169,6 +169,7 @@ def bare_shared():
     instance.zone_coord = None
     instance._zone_modes = ()
     instance._zone_stale_count = 0
+    instance._program_run = None
     return instance
 
 
@@ -352,3 +353,68 @@ async def test_send_program_sends_what_the_app_sends():
 
     with pytest.raises(HomeAssistantError):
         await SendProgram(shared).async_press()
+
+
+def _program_shared(current, total):
+    coord = MagicMock(last_update_success=True)
+    coord.data = zones.ProgramState(
+        names=DISHWASHER_NAMES, current=current, total_seconds=total
+    )
+    return SimpleNamespace(
+        program_coord=coord,
+        unique_id_prefix="fc:1b:ff:06:01:da",
+        device_info={},
+        restore_program_run=MagicMock(),
+    )
+
+
+def test_run_sensors_while_running():
+    from custom_components.vzug.sensor import RunProgress, RunTimeLeft
+
+    running = {
+        "id": 54,
+        "name": "Intensive",
+        "status": "active",
+        "duration": {"act": 2597},
+    }
+    shared = _program_shared(running, 5194)
+    assert RunTimeLeft(shared).native_value == 44
+    progress = RunProgress(shared)
+    assert progress.native_value == 50
+    assert progress.extra_state_attributes == {"program_id": 54, "total_seconds": 5194}
+
+
+def test_run_sensors_when_idle():
+    from custom_components.vzug.sensor import RunProgress, RunTimeLeft
+
+    shared = _program_shared(None, None)
+    assert RunTimeLeft(shared).native_value == 0
+    assert RunProgress(shared).native_value is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_programs_tracks_the_run_and_polls_faster(bare_shared):
+    from custom_components.vzug.shared import (
+        PROGRAM_COORD_INTERVAL,
+        PROGRAM_COORD_RUNNING_INTERVAL,
+    )
+
+    bare_shared._program_names = DISHWASHER_NAMES
+    bare_shared._program_run = None
+    bare_shared.program_coord = MagicMock()
+    selected = {"id": 50, "status": "selected", "duration": {"set": 21300}}
+    bare_shared.program_coord.data = zones.ProgramState(
+        names=DISHWASHER_NAMES, current=selected
+    )
+    bare_shared.client.get_raw_programs = AsyncMock(
+        return_value=[{"id": 50, "status": "active", "duration": {"act": 21290}}]
+    )
+    state = await bare_shared._fetch_programs()
+    assert state.total_seconds == 21300
+    assert bare_shared.program_coord.update_interval == PROGRAM_COORD_RUNNING_INTERVAL
+
+    bare_shared.program_coord.data = state
+    bare_shared.client.get_raw_programs = AsyncMock(return_value=[{"status": "idle"}])
+    state = await bare_shared._fetch_programs()
+    assert state.total_seconds is None
+    assert bare_shared.program_coord.update_interval == PROGRAM_COORD_INTERVAL

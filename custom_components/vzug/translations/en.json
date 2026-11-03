@@ -104,6 +104,12 @@
                     "on": "On",
                     "off": "Off"
                 }
+            },
+            "run_time_left": {
+                "name": "Time left"
+            },
+            "run_progress": {
+                "name": "Progress"
             }
         },
         "update": {

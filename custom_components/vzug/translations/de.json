@@ -104,6 +104,12 @@
           "on": "Ein",
           "off": "Aus"
         }
+      },
+      "run_time_left": {
+        "name": "Restzeit"
+      },
+      "run_progress": {
+        "name": "Fortschritt"
       }
     },
     "update": {

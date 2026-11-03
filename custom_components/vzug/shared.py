@@ -48,6 +48,8 @@ ProgramCoordinator = DataUpdateCoordinator[zones.ProgramState]
 # program picked on the panel shows up within this interval, one picked through
 # Home Assistant right away.
 PROGRAM_COORD_INTERVAL = STATE_COORD_IDLE_PROBE_INTERVAL
+# while a program runs the appliance is awake anyway, and the time left should move
+PROGRAM_COORD_RUNNING_INTERVAL = timedelta(seconds=30)
 
 ConfigCoordinator = DataUpdateCoordinator[api.AggConfig]
 # the config tree is a snapshot of the appliance's settings, so it barely ever
@@ -116,6 +118,7 @@ class Shared:
         self.zone_coord = None
         self.program_coord = None
         self._program_names: dict[int, str] = {}
+        self._program_run: zones.Run | None = None
         self._zone_modes: tuple[str, ...] = ()
         self._zone_stale_count = 0
         # durations (hours) the SuperCool / SuperFreeze / PartyCooling switches use,
@@ -244,10 +247,32 @@ class Shared:
                 raise UpdateFailed(f"program update failed: {exc!r}") from exc
             _LOGGER.debug("program update failed, keeping previous data: %r", exc)
             return previous
+        current = zones.current_program(raw_programs)
+        self._program_run = zones.track_run(
+            self._program_run, previous.current if previous else None, current
+        )
+        if self.program_coord is not None:
+            self.program_coord.update_interval = (
+                PROGRAM_COORD_RUNNING_INTERVAL
+                if self._program_run
+                else PROGRAM_COORD_INTERVAL
+            )
         return zones.ProgramState(
             names=self._program_names,
-            current=zones.current_program(raw_programs),
+            current=current,
+            total_seconds=self._program_run.total_seconds
+            if self._program_run
+            else None,
         )
+
+    def restore_program_run(self, program_id: int, total_seconds: int) -> None:
+        """Take back the length of a run that was going before Home Assistant
+        restarted, so progress does not start over at 0."""
+        current = self.program_coord.data.current if self.program_coord else None
+        left = zones.run_seconds_left(current)
+        if left is None or current.get("id") != program_id or total_seconds < left:
+            return
+        self._program_run = zones.Run(program_id, total_seconds)
 
     async def _fetch_zones(self) -> zones.ZoneState:
         previous = self.zone_coord.data if self.zone_coord else None

@@ -5,13 +5,14 @@ from decimal import Decimal
 from typing import Any, cast
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
@@ -20,7 +21,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import api, zones
 from .const import DOMAIN
 from .helpers import UserConfigEntity, ZoneEntity, snake
-from .shared import Shared, StateCoordinator
+from .shared import ProgramCoordinator, Shared, StateCoordinator
 
 # https://developers.home-assistant.io/docs/core/entity/sensor/
 
@@ -119,7 +120,76 @@ async def async_setup_entry(
         entities.append(Eco(shared, desc, category=category, field=field))
 
     entities.extend(_zone_entities(shared))
+    if shared.program_coord is not None:
+        entities.extend([RunTimeLeft(shared), RunProgress(shared)])
     async_add_entities(entities)
+
+
+class RunBase(CoordinatorEntity[ProgramCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+
+    def __init__(self, shared: Shared, key: str) -> None:
+        assert shared.program_coord is not None
+        super().__init__(shared.program_coord)
+        self.shared = shared
+        self._attr_translation_key = key
+        self._attr_unique_id = f"{shared.unique_id_prefix}-run-{key}"
+        self._attr_device_info = shared.device_info
+
+    @property
+    def seconds_left(self) -> int | None:
+        return zones.run_seconds_left(self.coordinator.data.current)
+
+
+class RunTimeLeft(RunBase):
+    """Minutes left of the running program, 0 when nothing runs."""
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_icon = "mdi:timer-sand"
+
+    def __init__(self, shared: Shared) -> None:
+        super().__init__(shared, "run_time_left")
+
+    @property
+    def native_value(self) -> int:
+        left = self.seconds_left
+        return -(-left // 60) if left else 0
+
+
+class RunProgress(RunBase, RestoreSensor):
+    """How far the running program is, in percent. Unknown when nothing runs."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:progress-clock"
+
+    def __init__(self, shared: Shared) -> None:
+        super().__init__(shared, "run_progress")
+
+    @property
+    def native_value(self) -> int | None:
+        return zones.progress_percent(
+            self.coordinator.data.total_seconds, self.seconds_left
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        current = self.coordinator.data.current or {}
+        return {
+            "program_id": current.get("id") if self.seconds_left is not None else None,
+            "total_seconds": self.coordinator.data.total_seconds,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is None:
+            return
+        program_id = last.attributes.get("program_id")
+        total = last.attributes.get("total_seconds")
+        if isinstance(program_id, int) and isinstance(total, int):
+            self.shared.restore_program_run(program_id, total)
 
 
 def _zone_entities(shared: Shared) -> list[SensorEntity]:

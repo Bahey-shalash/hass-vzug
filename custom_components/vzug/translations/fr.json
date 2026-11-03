@@ -104,6 +104,12 @@
                     "on": "Activé",
                     "off": "Désactivé"
                 }
+            },
+            "run_time_left": {
+                "name": "Temps restant"
+            },
+            "run_progress": {
+                "name": "Progression"
             }
         },
         "update": {
